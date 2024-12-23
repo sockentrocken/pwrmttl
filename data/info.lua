@@ -30,7 +30,7 @@ return {
     -- High DPI scale.
     high_scale = true,
     -- Window name.
-    name = "PWRMTTL",
+    name = "pwrmttl.",
     -- Window shape.
     shape = { 1024, 768 },
 }

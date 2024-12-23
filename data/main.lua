@@ -24,6 +24,7 @@
 
 require "asset/script/base"
 require "asset/script/help"
+require "asset/script/window"
 require "asset/script/entity"
 require "asset/script/player"
 require "asset/script/weapon"
@@ -37,13 +38,12 @@ function quiver.main()
     --quiver.window.set_state(WINDOW_FLAG.BORDERLESS_WINDOWED_MODE, true)
 
     quiver.general.set_frame_rate(288)
+    quiver.general.set_exit_key(INPUT_BOARD.KEY_F3)
 
-    state:new_map("data/asset/level/map.glb", "data/asset/video/test.png")
-
-    quiver.input.mouse.set_active(false)
+    state:new()
 
     -- while the window shouldn't close...
-    while not quiver.window.get_close() do
+    while not (quiver.window.get_close() or state.close) do
         -- debug restart.
         if quiver.input.board.get_press(INPUT_BOARD.KEY_F1) then
             return true
@@ -56,26 +56,28 @@ function quiver.main()
         -- get frame time, cap if the last frame took longer than 0.25 to render.
         local frame = math.min(quiver.general.get_frame_time(), 0.25)
 
-        -- increment accumulator.
-        state.step = state.step + frame
+        if not state.window.state then
+            -- increment accumulator.
+            state.step = state.step + frame
 
-        -- while accumulator is greater than TICK_RATE...
-        while state.step >= TICK_RATE do
-            table_pool:begin()
+            -- while accumulator is greater than TICK_RATE...
+            while state.step >= TICK_RATE do
+                table_pool:begin()
 
-            -- run a game tick for every entity.
-            for _, entity in pairs(state.entity) do
-                if entity.tick then
-                    entity:tick()
+                -- run a game tick for every entity.
+                for _, entity in pairs(state.entity) do
+                    if entity.tick then
+                        entity:tick()
+                    end
                 end
+
+                -- run a game tick for the rapier simulation.
+                state.rapier:step()
+
+                -- increment time, decrement accumulator.
+                state.time = state.time + TICK_RATE
+                state.step = state.step - TICK_RATE
             end
-
-            -- run a game tick for the rapier simulation.
-            state.rapier:step()
-
-            -- increment time, decrement accumulator.
-            state.time = state.time + TICK_RATE
-            state.step = state.step - TICK_RATE
         end
 
         table_pool:begin()
@@ -102,6 +104,10 @@ function draw()
     shape.x = shape.x * DRAW_SCALE
     shape.y = shape.y * DRAW_SCALE
 
+    if quiver.input.board.get_press(INPUT_BOARD.KEY_ESCAPE) then
+        state.window:set_state(not state.window.state)
+    end
+
     -- if the window has shrunk or grown, update the render texture
     if quiver.window.get_resize() then
         state.asset["view"] = quiver.render_texture.new(shape)
@@ -118,8 +124,8 @@ function draw()
 
         local fade = (math.sin(state.time) + 1.0) * 0.5 * 127.0
 
-        light_array[1].color = color:new(fade, fade, fade, fade)
-        light_array[1]:update(shader)
+        state.light[1].color = color:new(fade, fade, fade, fade)
+        state.light[1]:update(shader)
 
         shader:set_shader_vector_3(shader:get_location(SHADER_LOCATION.VECTOR_VIEW), state.camera_3d.point)
 
@@ -136,13 +142,16 @@ function draw()
         quiver.draw_3d.begin(draw_render, state.camera_render)
     end)
 
-    --shader_dither:begin(function()
-    -- draw the standard view render texture, and then overlay the hand view-model on top.
-    view:draw_pro(box_2:old(0.0, 0.0, shape.x, -shape.y), box_2:old(0.0, 0.0, window.x, window.y),
-        vector_2:zero(), 0.0, color:white())
-    hand:draw_pro(box_2:old(0.0, 0.0, shape.x, -shape.y), box_2:old(0.0, 0.0, window.x, window.y),
-        vector_2:zero(), 0.0, color:white())
-    --end)
+    shader_dither:begin(function()
+        -- draw the standard view render texture, and then overlay the hand view-model on top.
+        view:draw_pro(box_2:old(0.0, 0.0, shape.x, -shape.y), box_2:old(0.0, 0.0, window.x, window.y),
+            vector_2:zero(), 0.0, color:white())
+
+        if not state.window.state then
+            hand:draw_pro(box_2:old(0.0, 0.0, shape.x, -shape.y), box_2:old(0.0, 0.0, window.x, window.y),
+                vector_2:zero(), 0.0, color:white())
+        end
+    end)
 end
 
 --[[----------------------------------------------------------------]]
@@ -158,19 +167,48 @@ end
 
 function draw_3d()
     -- draw the current map.
-    state.asset[state.map]:draw(vector_3:zero(), 1.0, color:white())
+    if not state.window.state then
+        state.asset[state.map]:draw(vector_3:zero(), 1.0, color:white())
 
-    quiver.draw_3d.draw_cube(vector_3:old(0.0, 4.0, 0.0), vector_3:one(), color:white())
+        -- draw every entity (3D pass).
+        for key, entity in pairs(state.entity) do
+            if entity.draw_3d then
+                entity:draw_3d()
+            end
+        end
 
-    -- draw every entity (3D pass).
-    for key, entity in pairs(state.entity) do
-        if entity.draw_3d then
-            entity:draw_3d()
+        -- draw the rapier scene.
+        --state.rapier:debug_render()
+    else
+        local time = quiver.general.get_time()
+
+        local x = math.sin(time * 0.25) * 4.0
+        local z = math.cos(time * 0.25) * 4.0
+
+        state.camera_3d.point:copy(vector_3:old(x, 16.0, z))
+        state.camera_3d.focus:copy(vector_3:old(0.0, 0.0, 0.0))
+        --state.camera_3d.angle:copy(vector_3:old(0.0, 1.0, 0.0))
+        --state.camera_3d.zoom = 90.0
+
+        local max = 256
+
+        local size = vector_3:old(1.0, 8.0, 1.0)
+
+        for x = 1, max do
+            local max_x = math.floor((max - 1) % 16.0) * 2.0
+            local max_z = math.floor((max - 1) / 16.0) * 2.0
+
+            local point = vector_3:old(
+                math.floor((x - 1) % 16.0) * 2.0 - max_x * 0.5,
+                math.sin(time * (x / max) * 2.0) * 8.0,
+                math.floor((x - 1) / 16.0) * 2.0 - max_z * 0.5
+            )
+
+            local fade = (math.sin(time * (x / max) * 2.0) + 1.0) * 0.5 * 255.0
+
+            quiver.draw_3d.draw_cube(point, size, color:old(0.0, 0.0, 0.0, math.floor(fade)))
         end
     end
-
-    -- draw the rapier scene.
-    --state.rapier:debug_render()
 end
 
 --[[----------------------------------------------------------------]]
@@ -181,6 +219,10 @@ function draw_2d()
         if entity.draw_2d then
             entity:draw_2d()
         end
+    end
+
+    if state.window.state then
+        state.window:draw()
     end
 
     local frame = quiver.general.get_frame_rate()

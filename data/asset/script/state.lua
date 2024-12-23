@@ -55,9 +55,6 @@ function state:new()
     local ambient = light_shader:get_location_name("ambient")
     light_shader:set_shader_vector_4(ambient, vector_4:old(0.25, 0.25, 0.25, 1.0))
 
-    light:new(light_shader, 0, vector_3:new(0.0, 4.0, 0.0), vector_3:new(0.0, 0.0, 0.0),
-        color:new(255.0, 255.0, 255.0, 255.0))
-
     i.time = 0.0
     i.step = 0.0
     i.camera_3d = camera_3d:new(vector_3:zero():old_to_new(), vector_3:zero():old_to_new(), vector_3:y():old_to_new(),
@@ -69,20 +66,31 @@ function state:new()
     i.entity = {}
     i.entity_index = 0.0
     i.asset = {
-        ["sky.png"] = quiver.texture.new("data/asset/video/sky.png"),
-        ["light"]   = light_shader,
-        ["dither"]  = dither_shader,
-        ["view"]    = quiver.render_texture.new(shape),
-        ["hand"]    = quiver.render_texture.new(shape),
+        ["sky.png"]   = quiver.texture.new("data/asset/video/sky.png"),
+        ["test.png"]  = quiver.texture.new("data/asset/video/test.png"),
+        ["light"]     = light_shader,
+        ["dither"]    = dither_shader,
+        ["view"]      = quiver.render_texture.new(shape),
+        ["hand"]      = quiver.render_texture.new(shape),
+        ["font-main"] = quiver.font.new("data/asset/video/font_main.ttf"),
+        ["font-side"] = quiver.font.new("data/asset/video/font_side.ttf"),
     }
+    i.window = window:new()
+    i.light = {}
     i.map = nil
+    i.close = false
 
     state = i
+
+    light:new(light_shader, 0, vector_3:new(0.0, 4.0, 0.0), vector_3:new(0.0, 0.0, 0.0),
+        color:new(255.0, 255.0, 255.0, 255.0))
 end
 
 function state:new_map(model_path, texture_path)
     -- reset the current state.
     state:new()
+
+    print("//================================================================")
 
     -- load map model and texture.
     local model   = quiver.model.new(model_path)
@@ -108,6 +116,8 @@ function state:new_map(model_path, texture_path)
     -- bind current map to model name.
     state.map = model_path
 
+    state.window:set_state(false)
+
     -- create new player.
-    player:new(state)
+    player:new()
 end

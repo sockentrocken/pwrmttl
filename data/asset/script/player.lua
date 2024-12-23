@@ -112,10 +112,12 @@ function player:new()
     state.asset["hand_b.glb"]:bind(state.asset["test.png"])
 
     -- bind shader.
-    state.asset["hand_a.glb"]:bind_shader(state.asset["snap"])
-    state.asset["hand_b.glb"]:bind_shader(state.asset["snap"])
+    state.asset["hand_a.glb"]:bind_shader(state.asset["light"])
+    state.asset["hand_b.glb"]:bind_shader(state.asset["light"])
 
     weapon:new()
+
+    print("new player")
 
     return i
 end
@@ -269,6 +271,10 @@ function player:draw_render()
 end
 
 function player:draw_3d()
+    if state.window.state then
+        return
+    end
+
     -- update interpolation speed (we use this for the camera, mainly.)
     self.speed_interpolate:copy(self.speed_interpolate + (self.speed - self.speed_interpolate) * TICK_RATE * 4.0)
 
@@ -332,6 +338,10 @@ end
 --[[----------------------------------------------------------------]]
 
 function player:draw_2d()
+    if state.window.state then
+        return
+    end
+
     -- cap the speed to the maximum, just so stuff doesn't get too out of hand...
     local cap_speed = vector_3:old(
         number_clamp(-MAX_SPEED, MAX_SPEED, self.speed_interpolate.x),
@@ -366,7 +376,7 @@ function player:draw_2d()
     shape.x = (shape.x * DRAW_SCALE) * 0.5 - sway.x + slam.x - move_z
     shape.y = (shape.y * DRAW_SCALE) * 0.5 - sway.y + slam.y - move_y
 
-    local radius = 6.0 - (self.pull * 2.0) + (self.slam_interpolate * 2.0)
+    local radius = 5.0 - (self.pull * 2.0) + (self.slam_interpolate * 2.0)
 
     -- calculate slam circle start/end.
     local slam = (self.slam * -360) + 270.0
@@ -376,9 +386,9 @@ function player:draw_2d()
     if self.action == 1.0 then action_color = color:old(255.0, 0.0, 0.0, 255.0) end
     if self.action == 2.0 then action_color = color:old(0.0, 0.0, 255.0, 255.0) end
 
-    quiver.draw_2d.draw_circle(shape, radius, color:black())
+    quiver.draw_2d.draw_circle(shape, radius * 1.25, color:black())
     quiver.draw_2d.draw_circle_sector(shape, radius, 270.0, slam, 0.0,
-        color:old(0.0, 255.0, 0.0, 255.0))
+        color:old(127.0, 127.0, 127.0, 255.0))
     quiver.draw_2d.draw_circle(shape, radius * 0.5, action_color)
 end
 
@@ -543,7 +553,7 @@ end
 function player:tick_float(where, speed)
     local friction = 0.0
 
-    -- decrease vertical velocity.
+    -- decrease vertical velocity, if player is out of the dash state.
     if self.camera_dash < 0.5 then
         self.speed.y = self.speed.y - (GRAVITY * TICK_RATE)
     end
@@ -552,11 +562,6 @@ function player:tick_float(where, speed)
         friction = speed - self.speed:dot(where)
     else
         friction = FLOAT_THRESHOLD - self.speed:dot(where)
-    end
-
-    if self.camera_dash > 0.5 then
-        print("apply dash friction")
-        friction = 0.1
     end
 
     -- apply speed.

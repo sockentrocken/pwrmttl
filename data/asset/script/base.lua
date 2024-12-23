@@ -30,12 +30,12 @@ function table_pool:new(kind)
         __index = self
     })
 
-    for x = 1, 256 do
+    for x = 1, 1024 do
         i[x] = kind:default()
     end
 
     i.index = 1
-    i.count = 256
+    i.count = 1024
     i.kind = kind
 
     return i

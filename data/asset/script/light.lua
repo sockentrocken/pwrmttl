@@ -22,8 +22,6 @@
 * SOFTWARE.
 ]]
 
-light_array = {}
-
 ---@class light
 light = {}
 
@@ -38,17 +36,17 @@ function light:new(shader, type, point, focus, color)
     i.point = point
     i.focus = focus
     i.color = color
-    i.index = #light_array + 1
+    i.index = #state.light + 1
 
-    i.location_style = shader:get_location_name("lights[" .. tostring(#light_array) .. "].type")
-    i.location_state = shader:get_location_name("lights[" .. tostring(#light_array) .. "].enabled")
-    i.location_point = shader:get_location_name("lights[" .. tostring(#light_array) .. "].position")
-    i.location_focus = shader:get_location_name("lights[" .. tostring(#light_array) .. "].target")
-    i.location_color = shader:get_location_name("lights[" .. tostring(#light_array) .. "].color")
+    i.location_style = shader:get_location_name("lights[" .. tostring(#state.light) .. "].type")
+    i.location_state = shader:get_location_name("lights[" .. tostring(#state.light) .. "].enabled")
+    i.location_point = shader:get_location_name("lights[" .. tostring(#state.light) .. "].position")
+    i.location_focus = shader:get_location_name("lights[" .. tostring(#state.light) .. "].target")
+    i.location_color = shader:get_location_name("lights[" .. tostring(#state.light) .. "].color")
 
     i:update(shader)
 
-    table.insert(light_array, i)
+    table.insert(state.light, i)
 
     return i
 end
